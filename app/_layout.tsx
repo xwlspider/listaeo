@@ -4,8 +4,13 @@ import { TaskProvider } from "../lib/context/TaskContext";
 export default function RootLayout() {
   return (
     <TaskProvider>
-      <Stack />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: "#3b82f6" },
+          headerTintColor: "#fff",
+          headerTitleStyle: { fontWeight: "bold" },
+        }}
+      />
     </TaskProvider>
   );
 }
-

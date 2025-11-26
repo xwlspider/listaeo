@@ -1,82 +1,111 @@
-// app/TaskContext.tsx
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useReducer, useEffect } from "react";
 import {
-    TaskDTO,
-    createTask as apiCreateTask,
-    deleteTask as apiDeleteTask,
-    updateTask as apiUpdate,
-    fetchTasks,
+  fetchTasks,
+  createTask,
+  updateTask,
+  deleteTask,
 } from "../../services/api";
 
-type ContextValue = {
-  tasks: TaskDTO[];
-  loading: boolean;
-  refresh: () => Promise<void>;
-  addTask: (task: Omit<TaskDTO, "id" | "createdAt">) => Promise<void>;
-  editTask: (id: number, task: Omit<TaskDTO, "id" | "createdAt">) => Promise<void>;
-  removeTask: (id: number) => Promise<void>;
-};
+interface Task {
+  id: number;
+  title: string;
+  description: string;
+  done: boolean;
+}
 
-const TaskContext = createContext<ContextValue | null>(null);
+interface TaskState {
+  tasks: Task[];
+}
 
-export const TaskProvider = ({ children }: { children: React.ReactNode }) => {
-  const [tasks, setTasks] = useState<TaskDTO[]>([]);
-  const [loading, setLoading] = useState(true);
+type Action =
+  | { type: "SET_TASKS"; payload: Task[] }
+  | { type: "ADD_TASK"; payload: Task }
+  | { type: "EDIT_TASK"; payload: Task }
+  | { type: "REMOVE_TASK"; payload: number };
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchTasks();
-      setTasks(data);
-    } catch (e) {
-      console.warn("fetch tasks error", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+const TaskContext = createContext<any>(null);
+
+function reducer(state: TaskState, action: Action) {
+  switch (action.type) {
+    case "SET_TASKS":
+      return { ...state, tasks: action.payload };
+
+    case "ADD_TASK":
+      return { ...state, tasks: [...state.tasks, action.payload] };
+
+    case "EDIT_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === action.payload.id ? action.payload : t
+        ),
+      };
+
+    case "REMOVE_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.filter((t) => t.id !== action.payload),
+      };
+
+    default:
+      return state;
+  }
+}
+
+export function TaskProvider({ children }: any) {
+  const [state, dispatch] = useReducer(reducer, { tasks: [] });
 
   useEffect(() => {
-    refresh();
+    loadTasks();
   }, []);
 
-  const addTask = async (task: Omit<TaskDTO, "id" | "createdAt">) => {
-    const created = await apiCreateTask({
-      ...task,
-      createdAt: new Date().toISOString(), // FIX
-    });
-    setTasks((prev) => [created, ...prev]);
+  const loadTasks = async () => {
+    const data = await fetchTasks();
+    dispatch({ type: "SET_TASKS", payload: data });
   };
 
-  const editTask = async (id: number, task: Omit<TaskDTO, "id" | "createdAt">) => {
-    const updated = await apiUpdate(id, {
-      ...task,
-      createdAt: new Date().toISOString(),
-      id: 0
-    });
-    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  const addTask = async (task: { title: string; description: string }) => {
+    const newTask = await createTask(task);
+    dispatch({ type: "ADD_TASK", payload: newTask });
+  };
+
+  const editTask = async (id: number, data: any) => {
+    const updated = await updateTask(id, data);
+    dispatch({ type: "EDIT_TASK", payload: updated });
+  };
+
+  // SOLO cambiar estado done, NO eliminar ni ocultar
+  const toggleDone = async (id: number) => {
+    const task = state.tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const updated = await updateTask(id, { done: !task.done });
+    dispatch({ type: "EDIT_TASK", payload: updated });
   };
 
   const removeTask = async (id: number) => {
-    await apiDeleteTask(id);
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await deleteTask(id);
+    dispatch({ type: "REMOVE_TASK", payload: id });
   };
 
   return (
     <TaskContext.Provider
-      value={{ tasks, loading, refresh, addTask, editTask, removeTask }}
+      value={{
+        tasks: state.tasks,
+        loadTasks,
+        addTask,
+        editTask,
+        toggleDone,
+        removeTask,
+      }}
     >
       {children}
     </TaskContext.Provider>
   );
-};
-
-export function useTaskStore() {
-  const ctx = useContext(TaskContext);
-  if (!ctx) throw new Error("useTaskStore debe usarse dentro de <TaskProvider>");
-  return ctx;
 }
 
+export function useTaskStore() {
+  return useContext(TaskContext);
+}
 
-
-
-
+export default TaskProvider;

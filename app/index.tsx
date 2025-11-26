@@ -1,60 +1,118 @@
-import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Stack, useRouter } from "expo-router";
+import React, { useEffect } from "react";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTaskStore } from "../lib/context/TaskContext";
 
-export default function IndexScreen() {
+export default function Index() {
   const router = useRouter();
-  const { tasks } = useTaskStore();
+  const { tasks, loadTasks, toggleDone, removeTask } = useTaskStore();
+
+  useEffect(() => {
+    loadTasks();
+  }, []);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Bienvenido</Text>
-      <Text style={styles.subtitle}>Tareas registradas: {tasks.length}</Text>
+      <Stack.Screen options={{ title: "Mis Tareas" }} />
 
-      <Pressable
-        style={styles.button}
-        onPress={() => router.push("/LoginScreen")}
-      >
-        <Text style={styles.buttonText}>Registrarse</Text>
-      </Pressable>
+      <FlatList
+        data={tasks}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        renderItem={({ item }) => (
+          <View style={[styles.taskItem, item.done && styles.done]}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>
+                {item.title} {item.done ? "✔" : ""}
+              </Text>
+              <Text style={styles.desc}>{item.description}</Text>
+            </View>
 
-      <Pressable
-        style={[styles.button, { backgroundColor: "#444" }]}
-        onPress={() => router.push("/TaskForm")}
-      >
-        <Text style={styles.buttonText}>Crear Tarea</Text>
-      </Pressable>
+            {/* Contenedor de botones */}
+            <View style={styles.actions}>
+
+              {/* Botón: Hecha / Desmarcar */}
+              <Pressable
+                onPress={() => toggleDone(item.id)}
+                style={[
+                  styles.btn,
+                  { backgroundColor: item.done ? "#f87171" : "#16a34a" }
+                ]}
+              >
+                <Text style={styles.btnTxt}>
+                  {item.done ? "Desmarcar" : "Hecha"}
+                </Text>
+              </Pressable>
+
+              {/* Botón: Editar */}
+              <Pressable
+                onPress={() => router.push(`/TaskEdit?id=${item.id}`)}
+                style={[styles.btn, { backgroundColor: "#3b82f6" }]}
+              >
+                <Text style={styles.btnTxt}>Editar</Text>
+              </Pressable>
+
+              {/* Botón: Eliminar */}
+              <Pressable
+                onPress={() => removeTask(item.id)}
+                style={[styles.btn, { backgroundColor: "#ef4444" }]}
+              >
+                <Text style={styles.btnTxt}>Eliminar</Text>
+              </Pressable>
+
+            </View>
+          </View>
+        )}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    justifyContent: "center",
-    backgroundColor: "#fff",
+  container: { 
+    flex: 1, 
+    padding: 20, 
+    backgroundColor: "#fff" 
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    marginBottom: 10,
+
+  taskItem: {
+    padding: 15,
+    marginBottom: 14,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#555",
-    marginBottom: 20,
+
+  done: {
+    backgroundColor: "#d1fae5",
   },
-  button: {
-    backgroundColor: "#3b82f6",
-    padding: 14,
+
+  title: { 
+    fontSize: 18, 
+    fontWeight: "bold",
+    color: "#111827",
+  },
+
+  desc: { 
+    color: "#374151", 
+    marginTop: 5 
+  },
+
+  actions: {
+    flexDirection: "row",
     marginTop: 12,
-    borderRadius: 10,
-    alignItems: "center",
+    gap: 8,
   },
-  buttonText: {
-    color: "white",
+
+  btn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+
+  btnTxt: {
+    color: "#fff",
     fontWeight: "700",
-    fontSize: 16,
   },
 });

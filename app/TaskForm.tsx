@@ -1,4 +1,3 @@
-// app/TaskForm.tsx
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -16,51 +15,54 @@ export default function TaskForm() {
   const save = async () => {
     try {
       setErrors({});
-  
-      // 👇 Primero validar (ZOD)
-      const parsed = taskCreateSchema.parse({ title, description });
-  
-      // 👇 Luego guardar la tarea
+
+      const parsed = taskCreateSchema.parse({
+        title: title.trim(),
+        description: description.trim(),
+      });
+
       await addTask({
         title: parsed.title,
         description: parsed.description,
       });
-  
-      router.push("/");
+
+      router.back();
     } catch (e: any) {
-      // 🔍 Si es error de Zod → issues
       if (e?.issues) {
-        const zodErrors: any = {};
-  
-        e.issues.forEach((iss: any) => {
-          zodErrors[iss.path[0]] = iss.message;
+        const formErrors: Partial<Record<keyof TaskCreateInput, string>> = {};
+        e.issues.forEach((issue: any) => {
+          const field = issue.path[0] as keyof TaskCreateInput;
+          formErrors[field] = issue.message;
         });
-  
-        setErrors(zodErrors);
-        return; // 👈 MEGA IMPORTANTE para evitar que también salga la alerta
+        setErrors(formErrors);
+        Alert.alert("❌ Error de validación", "Por favor corrige los errores.");
+        return;
       }
-  
-      // ⚠ Error real del servidor
-      Alert.alert("Error", "No se pudo crear la tarea.");
+
+      console.error("Error saving task:", e);
     }
   };
-  
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Título</Text>
-      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Mi tarea" />
-      {errors.title ? <Text style={styles.err}>{errors.title}</Text> : null}
+      <TextInput
+        style={[styles.input, errors.title && styles.inputError]}
+        value={title}
+        onChangeText={setTitle}
+        placeholder="Mi tarea"
+      />
+      {errors.title && <Text style={styles.err}>{errors.title}</Text>}
 
       <Text style={styles.label}>Descripción</Text>
       <TextInput
-        style={[styles.input, styles.textArea]}
+        style={[styles.input, styles.textArea, errors.description && styles.inputError]}
         value={description}
         onChangeText={setDescription}
         placeholder="Detalle de la tarea"
         multiline
       />
-      {errors.description ? <Text style={styles.err}>{errors.description}</Text> : null}
+      {errors.description && <Text style={styles.err}>{errors.description}</Text>}
 
       <Pressable style={styles.btn} onPress={save}>
         <Text style={styles.btnTxt}>Guardar</Text>
@@ -71,18 +73,24 @@ export default function TaskForm() {
 
 const styles = StyleSheet.create({
   container: { padding: 20, flex: 1, backgroundColor: "#fff" },
-  label: { marginTop: 10, fontSize: 16, fontWeight: "600" },
+  label: { marginTop: 10, fontSize: 16, fontWeight: "600", marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
     padding: 10,
     borderRadius: 8,
-    marginTop: 6,
     backgroundColor: "#fff",
+    fontSize: 16,
   },
+  inputError: { borderColor: "#e05a4f", borderWidth: 2 },
   textArea: { height: 100, textAlignVertical: "top" },
-  btn: { marginTop: 16, backgroundColor: "#3b82f6", padding: 12, borderRadius: 8, alignItems: "center" },
-  btnTxt: { color: "#fff", fontWeight: "700" },
-  err: { color: "#e05a4f", marginTop: 6 },
+  btn: {
+    marginTop: 24,
+    backgroundColor: "#3b82f6",
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  btnTxt: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  err: { color: "#e05a4f", marginTop: 4, fontSize: 14 },
 });
-
