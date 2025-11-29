@@ -1,118 +1,329 @@
+
 import { Stack, useRouter } from "expo-router";
-import React, { useEffect } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, View,RefreshControl, Alert, } from "react-native";
 import { useTaskStore } from "../lib/context/TaskContext";
+import { TaskDTO } from "../services/api";
+import {
+  CheckCircle,
+  RotateCcw,
+  Eye,
+  Pencil,
+  Trash2,
+  Calendar,
+  ClipboardList,
+  Plus,
+} from "lucide-react-native";
+import {  Button, Card, StatusDot, EmptyState, LoadingScreen,} from "../components/ui";
 
 export default function Index() {
   const router = useRouter();
   const { tasks, loadTasks, toggleDone, removeTask } = useTaskStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // ✅ Cargar tareas al montar
   useEffect(() => {
-    loadTasks();
+    loadInitialTasks();
   }, []);
+
+  const loadInitialTasks = async () => {
+    try {
+      await loadTasks();
+    } catch (error) {
+      console.error("Error al cargar tareas:", error);
+      Alert.alert("Error", "No se pudieron cargar las tareas");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔄 Pull to refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadTasks();
+    } catch (error) {
+      console.error("Error al refrescar:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // ✅ Toggle done con manejo de errores
+  const handleToggleDone = async (id: number) => {
+    try {
+      await toggleDone(id);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo cambiar el estado de la tarea");
+      console.error("Error toggle:", error);
+    }
+  };
+
+  // 🗑️ Eliminar con confirmación
+  const handleRemove = (id: number, title: string) => {
+    Alert.alert(
+      "¿Eliminar tarea?",
+      `¿Estás seguro de eliminar "${title}"?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sí, eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeTask(id);
+            } catch (error) {
+              Alert.alert("Error", "No se pudo eliminar la tarea");
+              console.error("Error delete:", error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // 📝 Renderizar cada tarea
+  const renderTask = ({ item }: { item: TaskDTO }) => (
+    <Card variant={item.done ? "success" : "default"}>
+      {/* Contenido principal */}
+      <View style={styles.taskContent}>
+        {/* Indicador de estado */}
+        <StatusDot variant={item.done ? "success" : "warning"} />
+
+        <View style={styles.taskText}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, item.done && styles.titleDone]}>
+              {item.title}
+            </Text>
+            {item.done && (
+              <CheckCircle size={18} color="#10b981" style={styles.checkIcon} />
+            )}
+          </View>
+          
+          {item.description ? (
+            <Text style={[styles.desc, item.done && styles.descDone]} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+
+          <View style={styles.dateRow}>
+            <Calendar size={12} color="#9ca3af" style={styles.iconInline} />
+            <Text style={styles.date}>
+              {new Date(item.createdAt).toLocaleDateString("es-ES", {
+                day: "2-digit",
+                month: "short",
+              })}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Botones de acción */}
+      <View style={styles.actions}>
+        {/* Toggle Done */}
+        <Button
+          onPress={() => handleToggleDone(item.id)}
+          variant={item.done ? "warning" : "success"}
+          icon={item.done ? RotateCcw : CheckCircle}
+          iconSize={14}
+          style={styles.actionBtn}
+        >
+          {item.done ? "Desmarcar" : "Hecha"}
+        </Button>
+
+        {/* Ver detalle */}
+        <Button
+          onPress={() => router.push(`/task/${item.id}`)}
+          variant="info"
+          icon={Eye}
+          iconSize={14}
+          style={styles.actionBtn}
+        >
+          Ver
+        </Button>
+
+        {/* Editar */}
+        <Button
+          onPress={() =>
+            router.push({
+              pathname: "/TaskEdit",
+              params: { id: item.id },
+            })
+          }
+          variant="primary"
+          icon={Pencil}
+          iconSize={14}
+          style={styles.actionBtn}
+        >
+          Editar
+        </Button>
+
+        {/* Eliminar */}
+        <Button
+          onPress={() => handleRemove(item.id, item.title)}
+          variant="danger"
+          icon={Trash2}
+          iconSize={14}
+          style={[styles.actionBtn, styles.deleteBtn]}
+        >
+          {""}
+        </Button>
+      </View>
+    </Card>
+  );
+
+  // ⏳ Loading inicial
+  if (loading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: "Mis Tareas" }} />
+        <LoadingScreen message="Cargando tareas..." />
+      </>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: "Mis Tareas" }} />
+      <Stack.Screen
+        options={{
+          title: "Mis Tareas",
+          headerLeft: () => (
+            <ClipboardList size={20} color="#000" style={{ marginRight: 8 }} />
+          ),
+          headerRight: () => (
+            <Pressable
+              onPress={() => router.push("/TaskForm")}
+              style={styles.headerBtn}
+            >
+              <Plus size={16} color="#fff" style={styles.iconBtn} />
+              <Text style={styles.headerBtnTxt}>Nueva</Text>
+            </Pressable>
+          ),
+        }}
+      />
 
       <FlatList
         data={tasks}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        renderItem={({ item }) => (
-          <View style={[styles.taskItem, item.done && styles.done]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>
-                {item.title} {item.done ? "✔" : ""}
-              </Text>
-              <Text style={styles.desc}>{item.description}</Text>
-            </View>
-
-            {/* Contenedor de botones */}
-            <View style={styles.actions}>
-
-              {/* Botón: Hecha / Desmarcar */}
-              <Pressable
-                onPress={() => toggleDone(item.id)}
-                style={[
-                  styles.btn,
-                  { backgroundColor: item.done ? "#f87171" : "#16a34a" }
-                ]}
-              >
-                <Text style={styles.btnTxt}>
-                  {item.done ? "Desmarcar" : "Hecha"}
-                </Text>
-              </Pressable>
-
-              {/* Botón: Editar */}
-              <Pressable
-                onPress={() => router.push(`/TaskEdit?id=${item.id}`)}
-                style={[styles.btn, { backgroundColor: "#3b82f6" }]}
-              >
-                <Text style={styles.btnTxt}>Editar</Text>
-              </Pressable>
-
-              {/* Botón: Eliminar */}
-              <Pressable
-                onPress={() => removeTask(item.id)}
-                style={[styles.btn, { backgroundColor: "#ef4444" }]}
-              >
-                <Text style={styles.btnTxt}>Eliminar</Text>
-              </Pressable>
-
-            </View>
-          </View>
-        )}
+        renderItem={renderTask}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <EmptyState
+            icon={ClipboardList}
+            title="No hay tareas"
+            subtitle="¡Crea tu primera tarea para comenzar!"
+            buttonText="Nueva Tarea"
+            onButtonPress={() => router.push("/TaskForm")}
+            buttonIcon={Plus}
+          />
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#3b82f6"]}
+            tintColor="#3b82f6"
+          />
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    padding: 20, 
-    backgroundColor: "#fff" 
+  container: {
+    flex: 1,
+    backgroundColor: "#f9fafb",
   },
-
-  taskItem: {
-    padding: 15,
-    marginBottom: 14,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+  listContent: {
+    padding: 16,
+    paddingBottom: 100,
+    flexGrow: 1,
   },
-
-  done: {
-    backgroundColor: "#d1fae5",
+  taskContent: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
-
-  title: { 
-    fontSize: 18, 
-    fontWeight: "bold",
+  taskText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    gap: 6,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
     color: "#111827",
+    flex: 1,
   },
-
-  desc: { 
-    color: "#374151", 
-    marginTop: 5 
+  titleDone: {
+    textDecorationLine: "line-through",
+    opacity: 0.6,
   },
-
+  checkIcon: {
+    marginLeft: 4,
+  },
+  desc: {
+    color: "#6b7280",
+    fontSize: 14,
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  descDone: {
+    textDecorationLine: "line-through",
+    opacity: 0.5,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  date: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontStyle: "italic",
+  },
+  iconInline: {
+    marginRight: 2,
+  },
   actions: {
     flexDirection: "row",
-    marginTop: 12,
     gap: 8,
+    flexWrap: "wrap",
   },
-
-  btn: {
+  actionBtn: {
+    flex: 1,
+    minWidth: 70,
+    marginTop: 0,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingHorizontal: 8,
   },
-
-  btnTxt: {
+  deleteBtn: {
+    flex: 0,
+    minWidth: 45,
+  },
+  headerBtn: {
+    backgroundColor: "#3b82f6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  headerBtnTxt: {
     color: "#fff",
     fontWeight: "700",
+    fontSize: 14,
+  },
+  iconBtn: {
+    marginRight: 2,
   },
 });

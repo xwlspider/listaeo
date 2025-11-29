@@ -1,97 +1,113 @@
-import React, { createContext, useContext, useReducer, useEffect } from "react";
+// lib/context/TaskContext.tsx
+import React, { createContext, useContext, useEffect, useState } from "react";
 import {
-  fetchTasks,
   createTask,
-  updateTask,
   deleteTask,
+  fetchTasks,
+  updateTask,
+  TaskDTO,
 } from "../../services/api";
 
-interface Task {
-  id: number;
-  title: string;
-  description: string;
-  done: boolean;
+// ====================================
+// TIPOS
+// ====================================
+interface TaskContextType {
+  tasks: TaskDTO[];
+  loadTasks: () => Promise<void>;
+  addTask: (task: { title: string; description: string }) => Promise<void>;
+  editTask: (id: number, data: Partial<TaskDTO>) => Promise<void>;
+  toggleDone: (id: number) => Promise<void>;
+  removeTask: (id: number) => Promise<void>;
 }
 
-interface TaskState {
-  tasks: Task[];
-}
+// ====================================
+// CONTEXTO
+// ====================================
+const TaskContext = createContext<TaskContextType | null>(null);
 
-type Action =
-  | { type: "SET_TASKS"; payload: Task[] }
-  | { type: "ADD_TASK"; payload: Task }
-  | { type: "EDIT_TASK"; payload: Task }
-  | { type: "REMOVE_TASK"; payload: number };
+// ====================================
+// PROVIDER
+// ====================================
+export function TaskProvider({ children }: { children: React.ReactNode }) {
+  const [tasks, setTasks] = useState<TaskDTO[]>([]);
 
-const TaskContext = createContext<any>(null);
-
-function reducer(state: TaskState, action: Action) {
-  switch (action.type) {
-    case "SET_TASKS":
-      return { ...state, tasks: action.payload };
-
-    case "ADD_TASK":
-      return { ...state, tasks: [...state.tasks, action.payload] };
-
-    case "EDIT_TASK":
-      return {
-        ...state,
-        tasks: state.tasks.map((t) =>
-          t.id === action.payload.id ? action.payload : t
-        ),
-      };
-
-    case "REMOVE_TASK":
-      return {
-        ...state,
-        tasks: state.tasks.filter((t) => t.id !== action.payload),
-      };
-
-    default:
-      return state;
-  }
-}
-
-export function TaskProvider({ children }: any) {
-  const [state, dispatch] = useReducer(reducer, { tasks: [] });
-
+  // Cargar tareas al montar el componente
   useEffect(() => {
     loadTasks();
   }, []);
 
+  // 📥 GET - Cargar todas las tareas
   const loadTasks = async () => {
-    const data = await fetchTasks();
-    dispatch({ type: "SET_TASKS", payload: data });
+    try {
+      const data = await fetchTasks();
+      setTasks(data);
+    } catch (error) {
+      console.error("❌ Error al cargar tareas:", error);
+    }
   };
 
+  // 📤 POST - Agregar nueva tarea
   const addTask = async (task: { title: string; description: string }) => {
-    const newTask = await createTask(task);
-    dispatch({ type: "ADD_TASK", payload: newTask });
+    try {
+      const newTask = await createTask(task);
+      setTasks([...tasks, newTask]);
+    } catch (error) {
+      console.error("❌ Error al agregar tarea:", error);
+      throw error;
+    }
   };
 
-  const editTask = async (id: number, data: any) => {
-    const updated = await updateTask(id, data);
-    dispatch({ type: "EDIT_TASK", payload: updated });
+  // ✏️ PUT - Editar tarea completa
+  const editTask = async (id: number, data: Partial<TaskDTO>) => {
+    try {
+      const updated = await updateTask(id, data);
+      const newTasks = tasks.map((t) => (t.id === id ? updated : t));
+      setTasks(newTasks);
+    } catch (error) {
+      console.error("❌ Error al editar tarea:", error);
+      throw error;
+    }
   };
 
-  // SOLO cambiar estado done, NO eliminar ni ocultar
+  // ✅ Toggle - Cambiar estado "done"
   const toggleDone = async (id: number) => {
-    const task = state.tasks.find((t) => t.id === id);
-    if (!task) return;
+    try {
+      const task = tasks.find((t) => t.id === id);
+      if (!task) {
+        console.warn(`⚠️ Tarea con id ${id} no encontrada`);
+        return;
+      }
 
-    const updated = await updateTask(id, { done: !task.done });
-    dispatch({ type: "EDIT_TASK", payload: updated });
+      const updated = await updateTask(id, { done: !task.done });
+      const newTasks = tasks.map((t) => (t.id === id ? updated : t));
+      setTasks(newTasks);
+    } catch (error) {
+      console.error("❌ Error al cambiar estado de tarea:", error);
+      throw error;
+    }
   };
 
+  // 🗑️ DELETE - Eliminar tarea
   const removeTask = async (id: number) => {
-    await deleteTask(id);
-    dispatch({ type: "REMOVE_TASK", payload: id });
+    try {
+      // Primero eliminar del servidor
+      await deleteTask(id);
+      
+      // Si fue exitoso, actualizar estado local
+      const newTasks = tasks.filter((t) => t.id !== id);
+      setTasks(newTasks);
+      
+      console.log(`✅ Tarea ${id} eliminada exitosamente`);
+    } catch (error) {
+      console.error("❌ Error al eliminar tarea:", error);
+      throw error;
+    }
   };
 
   return (
     <TaskContext.Provider
       value={{
-        tasks: state.tasks,
+        tasks,
         loadTasks,
         addTask,
         editTask,
@@ -104,8 +120,17 @@ export function TaskProvider({ children }: any) {
   );
 }
 
+// ====================================
+// HOOK PERSONALIZADO
+// ====================================
 export function useTaskStore() {
-  return useContext(TaskContext);
+  const context = useContext(TaskContext);
+  
+  if (!context) {
+    throw new Error("useTaskStore debe usarse dentro de un TaskProvider");
+  }
+  
+  return context;
 }
 
 export default TaskProvider;

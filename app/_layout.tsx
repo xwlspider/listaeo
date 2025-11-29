@@ -10,7 +10,12 @@ export default function RootLayout() {
           headerTintColor: "#fff",
           headerTitleStyle: { fontWeight: "bold" },
         }}
-      />
+      >
+        <Stack.Screen name="index" options={{ title: "Mis Tareas" }} />
+        <Stack.Screen name="task/[id]" options={{ title: "Detalles" }} />
+        <Stack.Screen name="TaskEdit" options={{ title: "Editar Tarea" }} />
+        <Stack.Screen name="TaskForm" options={{ title: "Nueva Tarea" }} />
+      </Stack>
     </TaskProvider>
   );
 }

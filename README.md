@@ -1,53 +1,107 @@
-> Edited for use in IDX on 07/09/12
+📋 Aplicación de Gestión de Tareas - React Native + Expo
+📖 Descripción del Proyecto
+Aplicación móvil de gestión de tareas (To-Do List) desarrollada con React Native, Expo Router y TypeScript. Permite crear, leer, actualizar y eliminar tareas sincronizadas con una API REST usando Axios.
+✨ Características principales:
 
-# Welcome to your Expo app 👋
+✅ CRUD completo de tareas (Create, Read, Update, Delete)
+🌐 Sincronización con API REST mediante Axios
+🔄 Estado global con Context API
+✅ Validación de formularios con Zod
+📱 Navegación con Expo Router
+🎨 UI moderna con componentes nativos de React Native
+♻️ Pull to refresh para recargar datos
+🔔 Alertas de confirmación antes de eliminar
+⚠️ Problema Conocido: Edición de Tareas No Funciona
+🔍 Diagnóstico del problema
+Síntoma: Al intentar editar una tarea, la aplicación muestra un error 404.
+Causa raíz: El servidor json-server NO está sirviendo correctamente las rutas individuales (/tasks/:id).
+Verificación del problema:
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+GET /tasks funciona ✅ - Muestra todas las tareas
+GET /tasks/1 falla ❌ - Retorna 404 Not Found
+PUT /tasks/1 falla ❌ - No puede funcionar si GET falla
 
-## Get started
+🔬 Razones técnicas:
+1. IDs inconsistentes
+json-server puede generar IDs como strings ("afbd", "3828") en lugar de números (1, 2, 3), causando problemas en las rutas.
+json// ❌ Incorrecto
+{"id": "afbd", "title": "..."}
 
-#### Android
+// ✅ Correcto
+{"id": 1, "title": "..."}
+2. Servidor Cloud Workstations mal configurado
+Los servidores remotos pueden tener configuraciones que impiden el acceso a rutas individuales por CORS, proxy reverso o reglas de firewall.
+3. json-server no reiniciado correctamente
+Después de modificar db.json manualmente, json-server puede no recargar los datos correctamente.
+✅ Soluciones propuestas:
+Solución 1: Usar json-server localmente (RECOMENDADO)
+bash# 1. Instalar json-server
+npm install -g json-server
 
-Android previews are defined as a `workspace.onStart` hook and started as a vscode task when the workspace is opened/started.
+# 2. Crear db.json limpio
+echo '{"tasks":[]}' > db.json
 
-Note, if you can't find the task, either:
-- Rebuild the environment (using command palette: `IDX: Rebuild Environment`), or
-- Run `npm run android -- --tunnel` command manually run android and see the output in your terminal. The device should pick up this new command and switch to start displaying the output from it.
+# 3. Iniciar servidor
+json-server --watch db.json --port 3001 --host 0.0.0.0
 
-In the output of this command/task, you'll find options to open the app in a
+# 4. Verificar en navegador
+# http://localhost:3001/tasks/1 debe funcionar
+Solución 2: Forzar IDs numéricos secuenciales
+Modificar createTask en api.ts:
+typescriptexport async function createTask(task) {
+  const allTasks = await fetchTasks();
+  const nextId = allTasks.length > 0 
+    ? Math.max(...allTasks.map(t => t.id)) + 1 
+    : 1;
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+  const res = await axios.post(`${API_URL}/tasks`, {
+    id: nextId,  // ID secuencial: 1, 2, 3...
+    ...task,
+    done: false,
+    createdAt: new Date().toISOString(),
+  });
+  return res.data;
+}
+Solución 3: Cambiar a PATCH en lugar de PUT
+typescript// En api.ts
+export async function updateTask(id: number, data: Partial<TaskDTO>) {
+  const res = await axios.patch(`${API_URL}/tasks/${id}`, data);
+  return res.data;
+}
+🧪 Cómo verificar si está resuelto:
 
-You'll also find options to open the app's developer menu, reload the app, and more.
+Crear una tarea nueva
+Abrir en navegador: http://localhost:3001/tasks/1
+Si muestra la tarea → PUT funcionará ✅
+Si muestra "Not Found" → Problema persiste ❌
 
-#### Web
 
-Web previews will be started and managred automatically. Use the toolbar to manually refresh.
+🐛 Debugging
+Logs útiles agregados:
+typescript// En api.ts
+console.log("🔍 UPDATE TASK");
+console.log("URL:", `${API_URL}/tasks/${id}`);
+console.log("ID:", id, "| Tipo:", typeof id);
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+// En TaskContext.tsx
+console.log("🔍 CONTEXT - editTask");
+console.log("ID recibido:", id);
 
-## Get a fresh project
+// En TaskEdit.tsx
+console.log("🔍 TASKEDIT - handleSave");
+console.log("ID original:", id);
+console.log("ID Number:", Number(id));
+Verificar en Chrome DevTools:
 
-When you're ready, run:
+Abrir Metro Bundler
+Presionar j para abrir debugger
+Ver logs en Console
 
-```bash
-npm run reset-project
-```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+📚 Recursos adicionales
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Documentación de Axios
+json-server en npm
+Expo Router
+Zod validation
+React Native docs
